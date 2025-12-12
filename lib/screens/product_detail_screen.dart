@@ -14,105 +14,140 @@ class ProductDetailScreen extends StatefulWidget {
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final RetailService _service = RetailService();
 
-  // Fungsi Transaksi (Copas dari List Screen biar bisa jual dari sini juga)
+  // **Dialog Transaksi - Tidak mengubah fungsi**
   void _showTransactionDialog() {
     final qtyController = TextEditingController(text: "1");
     final priceController = TextEditingController();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          "Jual Produk",
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              widget.product['product_name'],
-              style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: qtyController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Jumlah (Qty)",
-                border: OutlineInputBorder(),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Jual Produk",
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 18,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: priceController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Harga Total (Rp)",
-                border: OutlineInputBorder(),
+              const SizedBox(height: 8),
+              Text(
+                widget.product['product_name'],
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: Colors.grey[600],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+
+              // INPUT FIELD
+              TextField(
+                controller: qtyController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: "Jumlah (Qty)",
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: priceController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: "Harga Total (Rp)",
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Batal"),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () async {
+                        if (qtyController.text.isEmpty ||
+                            priceController.text.isEmpty) return;
+
+                        Navigator.pop(context);
+
+                        bool success = await _service.createTransaction(
+                          widget.product['product_id'],
+                          int.parse(qtyController.text),
+                          double.parse(priceController.text),
+                        );
+
+                        if (success && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Transaksi Berhasil!"),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                          Navigator.pop(context, true);
+                        } else if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Gagal menyimpan transaksi"),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text("Simpan"),
+                    ),
+                  ),
+                ],
+              )
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Batal"),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () async {
-              if (qtyController.text.isEmpty || priceController.text.isEmpty)
-                return;
-
-              Navigator.pop(context);
-
-              bool success = await _service.createTransaction(
-                widget.product['product_id'],
-                int.parse(qtyController.text),
-                double.parse(priceController.text),
-              );
-
-              if (success && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Transaksi Berhasil!"),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-                Navigator.pop(
-                  context,
-                  true,
-                ); // Balik ke halaman sebelumnya & refresh
-              } else if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Gagal menyimpan transaksi"),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            child: const Text("SIMPAN"),
-          ),
-        ],
       ),
     );
   }
 
+  // ==================== UI ============================= //
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: const Color(0xFFF3F5F7),
       appBar: AppBar(
         title: Text(
           "Detail Produk",
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.white,
-        elevation: 0,
+        elevation: 0.5,
         foregroundColor: Colors.black,
       ),
       body: SingleChildScrollView(
@@ -120,60 +155,62 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Header Icon Produk Besar
+            // 🔵 HEADER ICON
             Center(
               child: Container(
                 width: 120,
                 height: 120,
                 decoration: BoxDecoration(
-                  color: Colors.blueAccent.withOpacity(0.1),
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.blueAccent.withOpacity(0.2),
+                      Colors.blueAccent.withOpacity(0.05)
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
-                  Icons.inventory_2,
+                  Icons.inventory_2_rounded,
                   size: 60,
                   color: Colors.blueAccent,
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
 
-            // 2. Informasi Utama
+            // ⚪ CARD INFO
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                  ),
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5))
                 ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    "Nama Produk",
-                    style: GoogleFonts.poppins(
-                      color: Colors.grey,
-                      fontSize: 12,
-                    ),
-                  ),
+                  _sectionTitle("Nama Produk"),
                   Text(
                     widget.product['product_name'],
                     style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  const Divider(),
-                  const SizedBox(height: 16),
 
-                  // Grid Info
+                  const SizedBox(height: 20),
+                  Divider(color: Colors.grey[300]),
+                  const SizedBox(height: 20),
+
+                  // GRID INFO
                   Row(
                     children: [
                       Expanded(
@@ -201,7 +238,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ),
                       Expanded(
                         child: _buildInfoItem("Segment", "General"),
-                      ), // Dummy data kalau di DB ga ada
+                      ),
                     ],
                   ),
                 ],
@@ -211,7 +248,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
       ),
 
-      // 3. Tombol Jual Besar di Bawah
+      // 🔵 BOTTOM BUTTON
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(20),
         color: Colors.white,
@@ -221,25 +258,38 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             backgroundColor: Colors.blueAccent,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
             ),
+            elevation: 3,
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(Icons.shopping_cart_checkout, color: Colors.white),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Text(
-                "BUAT TRANSAKSI",
+                "Buat Transaksi",
                 style: GoogleFonts.poppins(
                   fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
-              ),
+              )
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ======================= COMPONENT ========================== //
+
+  Widget _sectionTitle(String text) {
+    return Text(
+      text,
+      style: GoogleFonts.poppins(
+        fontSize: 13,
+        color: Colors.grey[600],
       ),
     );
   }
@@ -248,14 +298,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: GoogleFonts.poppins(color: Colors.grey, fontSize: 12),
-        ),
+        Text(label,
+            style:
+                GoogleFonts.poppins(color: Colors.grey[600], fontSize: 12)),
         const SizedBox(height: 4),
         Text(
           value,
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14),
+          style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w600, fontSize: 15),
         ),
       ],
     );
