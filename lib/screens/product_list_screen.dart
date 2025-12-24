@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import '../services/retail_service.dart';
 import 'product_detail_screen.dart';
+import 'qr_scanner_screen.dart';
 
 class ProductListScreen extends StatefulWidget {
   const ProductListScreen({super.key});
@@ -15,8 +15,13 @@ class _ProductListScreenState extends State<ProductListScreen> {
   final RetailService _service = RetailService();
   final TextEditingController _searchController = TextEditingController();
 
+  // --- VARIABEL UNTUK PAGINATION ---
   List<dynamic> _products = [];
   bool _isLoading = false;
+  int _currentPage = 1;
+  int _lastPage = 1;
+  int _totalItems = 0;
+  // ---------------------------------
 
   @override
   void initState() {
@@ -24,26 +29,37 @@ class _ProductListScreenState extends State<ProductListScreen> {
     _fetchProducts();
   }
 
-  void _fetchProducts({String query = ''}) async {
+  // Fungsi ambil data dengan Halaman
+  void _fetchProducts({String query = '', int page = 1}) async {
     setState(() => _isLoading = true);
     try {
-      // Variabel 'data' ini SUDAH berupa List Produk (karena sudah di-filter di Service)
-      final data = await _service.getProducts(query: query);
+      // Panggil service yang baru (terima Map lengkap)
+      final response = await _service.getProducts(query: query, page: page);
 
       setState(() {
-        // PERBAIKAN: Langsung masukkan data, jangan pakai ['data'] lagi
-        _products = data;
+        _products = response['data']; // Ambil list produknya
+        _currentPage = response['current_page']; // Halaman sekarang
+        _lastPage = response['last_page']; // Total halaman
+        _totalItems = response['total']; // Total semua barang
         _isLoading = false;
       });
     } catch (e) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
     }
   }
 
-  // Fungsi Tampilkan Dialog Transaksi
+  // Navigasi Halaman (Next / Prev)
+  void _changePage(int newPage) {
+    if (newPage < 1 || newPage > _lastPage) return;
+    _fetchProducts(query: _searchController.text, page: newPage);
+  }
+
+  // --- KITA KEMBALIKAN FUNGSI TRANSAKSI INI ---
   void _showTransactionDialog(Map<String, dynamic> product) {
     final qtyController = TextEditingController(text: "1");
     final priceController = TextEditingController();
@@ -66,18 +82,15 @@ class _ProductListScreenState extends State<ProductListScreen> {
             TextField(
               controller: qtyController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Jumlah (Qty)",
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(labelText: "Jumlah (Qty)"),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: priceController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
-                labelText: "Harga Total (Rp)",
-                border: OutlineInputBorder(),
+                labelText: "Harga Total (\$)",
+                prefixText: "\$ ",
               ),
             ),
           ],
@@ -95,10 +108,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
             onPressed: () async {
               if (qtyController.text.isEmpty || priceController.text.isEmpty)
                 return;
+              Navigator.pop(context);
 
-              Navigator.pop(context); // Tutup dialog dulu
-
-              // Kirim ke Backend
               bool success = await _service.createTransaction(
                 product['product_id'],
                 int.parse(qtyController.text),
@@ -108,15 +119,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
               if (success && mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text("Transaksi Berhasil disimpan!"),
+                    content: Text("Transaksi Berhasil!"),
                     backgroundColor: Colors.green,
-                  ),
-                );
-              } else if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Gagal menyimpan transaksi"),
-                    backgroundColor: Colors.red,
                   ),
                 );
               }
@@ -130,41 +134,67 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cardColor = Theme.of(context).cardTheme.color;
+    final scaffoldColor = Theme.of(context).scaffoldBackgroundColor;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: scaffoldColor,
       appBar: AppBar(
         title: Text(
           "Katalog Produk",
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.white,
         elevation: 0,
-        foregroundColor: Colors.black,
       ),
       body: Column(
         children: [
           // 1. SEARCH BAR
           Container(
             padding: const EdgeInsets.all(16),
-            color: Colors.white,
+            color: cardColor,
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: "Cari nama produk...",
+                hintText: "Cari nama / scan...",
                 prefixIcon: const Icon(Icons.search),
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_searchController.text.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.clear, color: Colors.grey),
+                        onPressed: () {
+                          _searchController.clear();
+                          _fetchProducts(page: 1); // Reset ke hal 1
+                        },
+                      ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.qr_code_scanner,
+                        color: Colors.blueAccent,
+                      ),
+                      onPressed: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const QRScannerScreen(),
+                          ),
+                        );
+                        if (result != null && result is String) {
+                          _searchController.text = result;
+                          _fetchProducts(query: result, page: 1);
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    _searchController.clear();
-                    _fetchProducts();
-                  },
-                ),
               ),
-              onSubmitted: (value) => _fetchProducts(query: value),
+              onSubmitted: (value) => _fetchProducts(query: value, page: 1),
             ),
           ),
 
@@ -186,10 +216,6 @@ class _ProductListScreenState extends State<ProductListScreen> {
                       final product = _products[index];
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
                         child: ListTile(
                           onTap: () {
                             Navigator.push(
@@ -221,26 +247,17 @@ class _ProductListScreenState extends State<ProductListScreen> {
                               fontSize: 14,
                             ),
                           ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 4),
-                              Text(
-                                "${product['category']} • ${product['sub_category']}",
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
+                          subtitle: Text(
+                            "${product['category']} • ${product['sub_category']}",
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
                           ),
                           trailing: ElevatedButton(
                             onPressed: () => _showTransactionDialog(product),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.green,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 16,
                                 vertical: 8,
@@ -259,6 +276,57 @@ class _ProductListScreenState extends State<ProductListScreen> {
                     },
                   ),
           ),
+
+          // 3. PAGINATION CONTROL (Tombol Next/Prev)
+          if (!_isLoading && _products.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.all(12),
+              color: cardColor,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Tombol PREV
+                  ElevatedButton.icon(
+                    onPressed: _currentPage > 1
+                        ? () => _changePage(_currentPage - 1)
+                        : null,
+                    icon: const Icon(Icons.arrow_back_ios, size: 14),
+                    label: const Text("Prev"),
+                    style: ElevatedButton.styleFrom(
+                      disabledBackgroundColor: Colors.grey.withOpacity(0.1),
+                    ),
+                  ),
+
+                  // Info Halaman (1 / 100)
+                  Column(
+                    children: [
+                      Text(
+                        "Halaman $_currentPage / $_lastPage",
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        "Total: $_totalItems Item",
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // Tombol NEXT
+                  ElevatedButton.icon(
+                    onPressed: _currentPage < _lastPage
+                        ? () => _changePage(_currentPage + 1)
+                        : null,
+                    icon: const Icon(Icons.arrow_forward_ios, size: 14),
+                    label: const Text("Next"),
+                    // Ubah arah icon di kanan teks
+                    iconAlignment: IconAlignment.end,
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
