@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // 1. Import SharedPreferences
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../services/retail_service.dart';
 import '../theme/theme_provider.dart';
 import 'product_list_screen.dart';
-import 'login_screen.dart'; // 2. Import Login Screen
+import 'login_screen.dart';
+import 'notification_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -48,14 +50,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // --- 3. FUNGSI LOGOUT ---
+  // Helper: Konversi data API ke Double
+  double _parseToDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is int) return value.toDouble();
+    if (value is double) return value;
+    if (value is String) {
+      return double.tryParse(value) ?? 0.0;
+    }
+    return 0.0;
+  }
+
+  // --- LOGOUT LOGIC ---
+
   void _logout(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear(); // Hapus sesi login
+    await prefs.clear();
 
     if (!mounted) return;
 
-    // Pindah ke Login & Hapus semua history halaman sebelumnya
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -63,7 +76,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- 4. DIALOG KONFIRMASI LOGOUT ---
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -80,8 +92,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(context); // Tutup dialog dulu
-              _logout(context); // Baru logout
+              Navigator.pop(context);
+              _logout(context);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -93,6 +105,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
+
+  // --- UI BUILDER ---
 
   @override
   Widget build(BuildContext context) {
@@ -107,7 +121,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
         actions: [
-          // SAKLAR TEMA
+          // Theme Switcher
           Consumer<ThemeProvider>(
             builder: (context, theme, child) {
               return Row(
@@ -127,20 +141,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
             },
           ),
 
-          // TOMBOL REFRESH
+          // Refresh Button
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.blueAccent),
             tooltip: "Refresh Data",
             onPressed: _fetchData,
           ),
 
-          // --- 5. TOMBOL LOGOUT BARU ---
+          // Notification Button
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_none, size: 28),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const NotificationScreen(),
+                    ),
+                  );
+                },
+              ),
+              Positioned(
+                right: 12,
+                top: 12,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // Logout Button
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.red),
             tooltip: "Logout",
             onPressed: () => _showLogoutDialog(context),
           ),
-          const SizedBox(width: 8), // Sedikit jarak di kanan
+          const SizedBox(width: 8),
         ],
       ),
 
@@ -171,12 +215,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. KARTU TOTAL SALES
+                    // Kartu Total Sales
                     _buildTotalCard(currency),
 
                     const SizedBox(height: 24),
 
-                    // 2. GRAFIK TREN
+                    // Line Chart
                     Text(
                       "Tren Penjualan (6 Bulan)",
                       style: GoogleFonts.poppins(
@@ -197,7 +241,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                     const SizedBox(height: 24),
 
-                    // 3. PIE CHART
+                    // Pie Chart
                     Text(
                       "Analisis Produk",
                       style: GoogleFonts.poppins(
@@ -231,7 +275,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                     const SizedBox(height: 24),
 
-                    // 4. TOP PRODUCTS
+                    // List Top Products
                     Text(
                       "Top 5 Produk Terlaris",
                       style: GoogleFonts.poppins(
@@ -241,6 +285,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SizedBox(height: 12),
                     ...(_data!['top_products'] as List).map((prod) {
+                      double sales = _parseToDouble(prod['total_sales']);
+
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.all(16),
@@ -282,7 +328,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     ),
                                   ),
                                   Text(
-                                    "Terjual: \$${prod['total_sales']}",
+                                    "Terjual: \$${sales.toStringAsFixed(2)}",
                                     style: GoogleFonts.poppins(
                                       fontSize: 12,
                                       color: Colors.grey,
@@ -304,9 +350,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- WIDGET HELPER ---
+  // --- WIDGET HELPERS ---
 
   Widget _buildTotalCard(NumberFormat currency) {
+    double total = _parseToDouble(_data!['total_sales']);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -338,7 +386,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            currency.format(_data!['total_sales']),
+            currency.format(total),
             style: GoogleFonts.poppins(
               color: Colors.white,
               fontSize: 32,
@@ -355,14 +403,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- CHART LOGIC ---
+  // --- CHART DATA GENERATORS ---
 
   LineChartData _buildLineChartData(Color? textColor) {
     List<dynamic> trends = _data!['monthly_sales_trend'];
     List<FlSpot> spots = [];
 
     for (int i = 0; i < trends.length; i++) {
-      double yVal = double.parse(trends[i]['total'].toString());
+      double yVal = _parseToDouble(trends[i]['total']);
       spots.add(FlSpot(i.toDouble(), yVal));
     }
 
@@ -424,16 +472,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
       Colors.red,
     ];
 
+    double totalAll = 0;
+    for (var cat in cats) {
+      totalAll += _parseToDouble(cat['total']);
+    }
+
     return PieChartData(
       sectionsSpace: 2,
       centerSpaceRadius: 40,
       sections: List.generate(cats.length, (i) {
         final cat = cats[i];
-        final double value = double.parse(cat['total'].toString());
+        final double value = _parseToDouble(cat['total']);
+
+        String percent = totalAll > 0
+            ? '${(value / totalAll * 100).toStringAsFixed(0)}%'
+            : '0%';
+
         return PieChartSectionData(
           color: colors[i % colors.length],
           value: value,
-          title: '${(value / _data!['total_sales'] * 100).toStringAsFixed(0)}%',
+          title: percent,
           radius: 50,
           titleStyle: const TextStyle(
             fontSize: 12,

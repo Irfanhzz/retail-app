@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/retail_service.dart';
+import '../services/notification_service.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -14,7 +15,6 @@ class ProductDetailScreen extends StatefulWidget {
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final RetailService _service = RetailService();
 
-  // Fungsi Transaksi
   void _showTransactionDialog() {
     final qtyController = TextEditingController(text: "1");
     final priceController = TextEditingController();
@@ -22,7 +22,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        // Judul ikut tema
         title: Text(
           "Jual Produk",
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
@@ -32,7 +31,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           children: [
             Text(
               widget.product['product_name'],
-              // Warna teks abu di mode terang, agak terang di mode gelap
+              textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
                 fontSize: 12,
                 color:
@@ -50,9 +49,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               controller: priceController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
-                labelText: "Harga Total (\$)", // Pakai \ sebelum $
+                labelText: "Harga Total (\$)",
                 hintText: "Contoh: 500.00",
-                prefixText: "\$ ", // Pakai \ sebelum $
+                prefixText: "\$ ",
                 border: OutlineInputBorder(),
               ),
             ),
@@ -69,29 +68,63 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               foregroundColor: Colors.white,
             ),
             onPressed: () async {
-              if (qtyController.text.isEmpty || priceController.text.isEmpty)
+              if (qtyController.text.isEmpty || priceController.text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Harap isi semua kolom!")),
+                );
                 return;
+              }
 
-              Navigator.pop(context);
+              int qty = int.tryParse(qtyController.text) ?? 1;
+              double sales =
+                  double.tryParse(priceController.text.replaceAll(',', '')) ??
+                  0.0;
+              int prodId =
+                  int.tryParse(widget.product['product_id'].toString()) ?? 0;
 
-              bool success = await _service.createTransaction(
-                widget.product['product_id'],
-                int.parse(qtyController.text),
-                double.parse(priceController.text),
+              // Capture Context Reference
+              final navigator = Navigator.of(context);
+              final messenger = ScaffoldMessenger.of(context);
+
+              navigator.pop();
+
+              messenger.showSnackBar(
+                const SnackBar(content: Text("Memproses transaksi...")),
               );
 
-              if (success && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
+              bool success = await _service.createTransaction(
+                prodId,
+                qty,
+                sales,
+              );
+
+              if (success) {
+                try {
+                  await NotificationService().showTransactionSuccess(
+                    widget.product['product_name'],
+                    qty,
+                    priceController.text,
+                  );
+                } catch (e) {
+                  debugPrint("Notifikasi error: $e");
+                }
+
+                messenger.showSnackBar(
                   const SnackBar(
                     content: Text("Transaksi Berhasil!"),
                     backgroundColor: Colors.green,
                   ),
                 );
-                Navigator.pop(context, true); // Balik & Refresh
-              } else if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
+
+                if (mounted) {
+                  Navigator.pop(context, true);
+                }
+              } else {
+                messenger.showSnackBar(
                   const SnackBar(
-                    content: Text("Gagal menyimpan transaksi"),
+                    content: Text(
+                      "Gagal menyimpan transaksi (Cek koneksi/input)",
+                    ),
                     backgroundColor: Colors.red,
                   ),
                 );
@@ -106,29 +139,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // AMBIL WARNA DARI TEMA
     final cardColor = Theme.of(context).cardTheme.color;
     final scaffoldColor = Theme.of(context).scaffoldBackgroundColor;
     final textColor = Theme.of(context).textTheme.bodyLarge?.color;
 
     return Scaffold(
-      backgroundColor: scaffoldColor, // Background Dinamis
-
+      backgroundColor: scaffoldColor,
       appBar: AppBar(
         title: Text(
           "Detail Produk",
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
-        // Hapus background/foreground statis, biarkan ikut tema
         elevation: 0,
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Header Icon Produk Besar
+            // Header Icon
             Center(
               child: Container(
                 width: 120,
@@ -146,12 +175,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
             const SizedBox(height: 24),
 
-            // 2. Informasi Utama (Kartu)
+            // Info Card
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: cardColor, // <--- PENTING: Ikut warna kartu tema
+                color: cardColor,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
@@ -175,27 +204,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     style: GoogleFonts.poppins(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: textColor, // Pastikan teks kontras
+                      color: textColor,
                     ),
                   ),
                   const SizedBox(height: 16),
                   const Divider(),
                   const SizedBox(height: 16),
 
-                  // Grid Info
                   Row(
                     children: [
                       Expanded(
                         child: _buildInfoItem(
                           "Kategori",
-                          widget.product['category'],
+                          widget.product['category'] ?? '-',
                           textColor,
                         ),
                       ),
                       Expanded(
                         child: _buildInfoItem(
                           "Sub-Kategori",
-                          widget.product['sub_category'],
+                          widget.product['sub_category'] ?? '-',
                           textColor,
                         ),
                       ),
@@ -207,7 +235,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       Expanded(
                         child: _buildInfoItem(
                           "ID Produk",
-                          widget.product['product_source_id'],
+                          widget.product['product_source_id'] ?? '-',
                           textColor,
                         ),
                       ),
@@ -223,10 +251,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
       ),
 
-      // 3. Tombol Jual Besar di Bawah
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(20),
-        color: cardColor, // Background area tombol ikut warna kartu
+        color: cardColor,
         child: ElevatedButton(
           onPressed: _showTransactionDialog,
           style: ElevatedButton.styleFrom(
@@ -270,7 +297,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w600,
             fontSize: 14,
-            color: textColor, // Teks nilai ikut tema
+            color: textColor,
           ),
         ),
       ],

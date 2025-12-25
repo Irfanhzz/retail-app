@@ -44,7 +44,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
         Navigator.pop(context); // Balik ke halaman Login
       } else {
-        throw Exception("Gagal Mendaftar");
+        throw Exception("Gagal Mendaftar (Cek koneksi/email sudah dipakai)");
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -74,9 +74,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
+            // Header Icon
             const Icon(Icons.person_add, size: 80, color: Colors.blueAccent),
             const SizedBox(height: 24),
 
+            // Form Container
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -96,6 +98,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
                       labelText: "Email",
                       prefixIcon: Icon(Icons.email),

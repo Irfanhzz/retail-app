@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/retail_service.dart';
 import 'dashboard_screen.dart';
-import 'register_screen.dart'; // Nanti kita buat ini
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -29,27 +29,33 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Panggil Service Login
       bool success = await _service.login(
         _emailController.text,
         _passwordController.text,
       );
 
       if (success && mounted) {
-        // Simpan Sesi di HP
+        // Simpan Sesi
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isLoggedIn', true);
         await prefs.setString('userEmail', _emailController.text);
 
-        // Pindah ke Dashboard (Hapus history login biar gak bisa di-back)
+        // Pindah ke Dashboard
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const DashboardScreen()),
         );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Login Gagal. Cek email/password."),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -58,8 +64,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Tema
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = Theme.of(context).cardTheme.color;
 
     return Scaffold(
@@ -69,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // 1. LOGO / ICON
+              // Logo Area
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -97,7 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 40),
 
-              // 2. FORM INPUT
+              // Form Area
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -114,6 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     TextField(
                       controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
                       decoration: const InputDecoration(
                         labelText: "Email",
                         prefixIcon: Icon(Icons.email_outlined),
@@ -132,7 +137,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // TOMBOL LOGIN
                     SizedBox(
                       width: double.infinity,
                       height: 50,
@@ -164,7 +168,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 24),
 
-              // 3. TOMBOL REGISTER
+              // Register Link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [

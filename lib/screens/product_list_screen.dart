@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/retail_service.dart';
+import '../services/notification_service.dart';
 import 'product_detail_screen.dart';
 import 'qr_scanner_screen.dart';
 
@@ -15,13 +16,12 @@ class _ProductListScreenState extends State<ProductListScreen> {
   final RetailService _service = RetailService();
   final TextEditingController _searchController = TextEditingController();
 
-  // --- VARIABEL UNTUK PAGINATION ---
+  // Pagination State
   List<dynamic> _products = [];
   bool _isLoading = false;
   int _currentPage = 1;
   int _lastPage = 1;
   int _totalItems = 0;
-  // ---------------------------------
 
   @override
   void initState() {
@@ -29,18 +29,16 @@ class _ProductListScreenState extends State<ProductListScreen> {
     _fetchProducts();
   }
 
-  // Fungsi ambil data dengan Halaman
   void _fetchProducts({String query = '', int page = 1}) async {
     setState(() => _isLoading = true);
     try {
-      // Panggil service yang baru (terima Map lengkap)
       final response = await _service.getProducts(query: query, page: page);
 
       setState(() {
-        _products = response['data']; // Ambil list produknya
-        _currentPage = response['current_page']; // Halaman sekarang
-        _lastPage = response['last_page']; // Total halaman
-        _totalItems = response['total']; // Total semua barang
+        _products = response['data'];
+        _currentPage = response['current_page'];
+        _lastPage = response['last_page'];
+        _totalItems = response['total'];
         _isLoading = false;
       });
     } catch (e) {
@@ -53,13 +51,12 @@ class _ProductListScreenState extends State<ProductListScreen> {
     }
   }
 
-  // Navigasi Halaman (Next / Prev)
   void _changePage(int newPage) {
     if (newPage < 1 || newPage > _lastPage) return;
     _fetchProducts(query: _searchController.text, page: newPage);
   }
 
-  // --- KITA KEMBALIKAN FUNGSI TRANSAKSI INI ---
+  // --- TRANSACTION DIALOG ---
   void _showTransactionDialog(Map<String, dynamic> product) {
     final qtyController = TextEditingController(text: "1");
     final priceController = TextEditingController();
@@ -76,7 +73,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
           children: [
             Text(
               product['product_name'],
-              style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
+              style: GoogleFonts.poppins(fontSize: 12),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -101,26 +98,54 @@ class _ProductListScreenState extends State<ProductListScreen> {
             child: const Text("Batal"),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              foregroundColor: Colors.white,
-            ),
             onPressed: () async {
               if (qtyController.text.isEmpty || priceController.text.isEmpty)
                 return;
-              Navigator.pop(context);
 
-              bool success = await _service.createTransaction(
-                product['product_id'],
-                int.parse(qtyController.text),
-                double.parse(priceController.text),
+              // Capture Context Reference (Anti-Crash)
+              final messenger = ScaffoldMessenger.of(context);
+              final navigator = Navigator.of(context);
+
+              // Parse Data Safely
+              int qty = int.tryParse(qtyController.text) ?? 1;
+              double sales =
+                  double.tryParse(priceController.text.replaceAll(',', '')) ??
+                  0.0;
+              int prodId = int.tryParse(product['product_id'].toString()) ?? 0;
+
+              navigator.pop(); // Close Dialog
+
+              messenger.showSnackBar(
+                const SnackBar(content: Text("Memproses transaksi...")),
               );
 
-              if (success && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
+              bool success = await _service.createTransaction(
+                prodId,
+                qty,
+                sales,
+              );
+
+              if (success) {
+                // Trigger Notification
+                try {
+                  await NotificationService().showTransactionSuccess(
+                    product['product_name'],
+                    qty,
+                    priceController.text,
+                  );
+                } catch (_) {}
+
+                messenger.showSnackBar(
                   const SnackBar(
                     content: Text("Transaksi Berhasil!"),
                     backgroundColor: Colors.green,
+                  ),
+                );
+              } else {
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text("Gagal! Cek inputan."),
+                    backgroundColor: Colors.red,
                   ),
                 );
               }
@@ -148,7 +173,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
       ),
       body: Column(
         children: [
-          // 1. SEARCH BAR
+          // 1. Search Bar
           Container(
             padding: const EdgeInsets.all(16),
             color: cardColor,
@@ -165,7 +190,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                         icon: const Icon(Icons.clear, color: Colors.grey),
                         onPressed: () {
                           _searchController.clear();
-                          _fetchProducts(page: 1); // Reset ke hal 1
+                          _fetchProducts(page: 1);
                         },
                       ),
                     IconButton(
@@ -198,7 +223,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
             ),
           ),
 
-          // 2. LIST PRODUK
+          // 2. Product List
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -277,7 +302,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   ),
           ),
 
-          // 3. PAGINATION CONTROL (Tombol Next/Prev)
+          // 3. Pagination Controls
           if (!_isLoading && _products.isNotEmpty)
             Container(
               padding: const EdgeInsets.all(12),
@@ -285,7 +310,6 @@ class _ProductListScreenState extends State<ProductListScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Tombol PREV
                   ElevatedButton.icon(
                     onPressed: _currentPage > 1
                         ? () => _changePage(_currentPage - 1)
@@ -296,8 +320,6 @@ class _ProductListScreenState extends State<ProductListScreen> {
                       disabledBackgroundColor: Colors.grey.withOpacity(0.1),
                     ),
                   ),
-
-                  // Info Halaman (1 / 100)
                   Column(
                     children: [
                       Text(
@@ -313,15 +335,12 @@ class _ProductListScreenState extends State<ProductListScreen> {
                       ),
                     ],
                   ),
-
-                  // Tombol NEXT
                   ElevatedButton.icon(
                     onPressed: _currentPage < _lastPage
                         ? () => _changePage(_currentPage + 1)
                         : null,
                     icon: const Icon(Icons.arrow_forward_ios, size: 14),
                     label: const Text("Next"),
-                    // Ubah arah icon di kanan teks
                     iconAlignment: IconAlignment.end,
                   ),
                 ],

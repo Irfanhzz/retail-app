@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/dashboard_screen.dart';
-import 'screens/login_screen.dart'; // Pastikan file ini ada
+import 'screens/login_screen.dart';
 import 'theme/theme_provider.dart';
+import 'services/notification_service.dart';
 
 void main() async {
-  // Wajib ada karena kita pakai SharedPreferences sebelum runApp
   WidgetsFlutterBinding.ensureInitialized();
 
-  // (Kode Notifikasi saya hapus di sini)
+  await NotificationService().init();
 
   runApp(
     ChangeNotifierProvider(
@@ -34,9 +34,7 @@ class RetailApp extends StatelessWidget {
           themeMode: themeProvider.themeMode,
           theme: lightTheme,
           darkTheme: darkTheme,
-          // -------------------
 
-          // CEK STATUS LOGIN DULU
           home: const AuthCheck(),
         );
       },
@@ -64,12 +62,10 @@ class _AuthCheckState extends State<AuthCheck> {
   void _checkStatus() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Kasih jeda dikit biar berasa "Loading App" (Splash Screen sederhana)
     await Future.delayed(const Duration(seconds: 2));
 
     if (mounted) {
       setState(() {
-        // Cek apakah user pernah login sebelumnya
         _isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
       });
     }
@@ -77,7 +73,6 @@ class _AuthCheckState extends State<AuthCheck> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Kalau status masih null (lagi loading cek HP), tampilkan Logo Loading
     if (_isLoggedIn == null) {
       return Scaffold(
         backgroundColor: Colors.white,
@@ -87,16 +82,13 @@ class _AuthCheckState extends State<AuthCheck> {
             children: const [
               Icon(Icons.storefront, size: 80, color: Colors.blueAccent),
               SizedBox(height: 20),
-              CircularProgressIndicator(), // Loading muter-muter
+              CircularProgressIndicator(),
             ],
           ),
         ),
       );
     }
 
-    // 2. Kalau sudah selesai cek:
-    // Sudah Login? -> Masuk Dashboard
-    // Belum Login? -> Masuk Login Screen
     return _isLoggedIn! ? const DashboardScreen() : const LoginScreen();
   }
 }

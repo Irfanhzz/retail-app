@@ -41,6 +41,7 @@ dependencies:
   provider: ^6.1.5+1
   mobile_scanner: ^7.1.4
   shared_preferences: ^2.5.4
+  flutter_local_notifications: ^19.5.0
 
 dev_dependencies:
   flutter_test:
